@@ -3,6 +3,22 @@
 
 import praw
 import configparser, csv
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+
+def youtube_authenicate(youtubeConfig):
+    return build(
+        youtubeConfig['YOUTUBE_API_SERVICE_NAME'], 
+        youtubeConfig['YOUTUBE_API_VERSION'],
+        developerKey=youtubeConfig['DEVELOPER_KEY'])
+
+def reddit_authenicate(redditConfig):
+     return praw.Reddit(
+        client_id=redditConfig['CLIENT_ID'],
+        client_secret=redditConfig['CLIENT_SECRET'],
+        password=redditConfig['PASSWORD'],
+        user_agent=redditConfig['USER_AGENT'],
+        username=redditConfig['USERNAME'])
 
 def get_posts_info(reddit):
     posts = [ ]
@@ -11,29 +27,31 @@ def get_posts_info(reddit):
         posts.append([p.score, p.num_comments, p.url])
     return posts
 
-def get_vid_length(id, start=0, end=0):
+def get_vid_length(yt, start=0, end=0):
     return 0
 
-def get_id(url):
+def parse_url(url):
     part = url.split('/')[-1].split('watch?v=')[-1]
-    vid_id = part.split('?t=')[0]
+    vid_id = part.split('?t=')[0].split('&t=')[0].split('&feature')[0]
     # get the start/end time
-    time = part.split('?t=')
-    if len(time) == 1:
-        return [vid_id, 0, 0]
-    else:
-        t = ''.join([i for i in time[1] if not i.isalpha()])
-        return [vid_id, t, 0]
+    start = part.split('?t=')[-1].split('&t=')[-1]
+    print(type(start))
+    if len(start) == 1: start = 0
+    else: t = ''.join([i for i in start[1] if not i.isalpha()])
+
+    print(f'url = {url}, id = {vid_id}, start = {start}')
+    return [vid_id, start, 0]
 
 def main():
     config = configparser.ConfigParser()
     config.read('credentials.ini')
-    redditCreds = config['Auth-Reddit']
-    redditAPI = praw.Reddit(client_id=redditCreds['client_id'],
-                            client_secret=redditCreds['client_secret'],
-                            password=redditCreds['password'],
-                            user_agent=redditCreds['user_agent'],
-                            username=redditCreds['username'])
+    # Authenicate Reddit
+    redditConfig = config['Auth-Reddit']
+    redditAPI = reddit_authenicate(redditConfig)
+    # Authenicate YouTube
+    youtubeConfig = config['Auth-YouTube']
+    youtube = youtube_authenicate(youtubeConfig)
+
     output_file = 'data.csv'
 
     # get list of post info
@@ -41,7 +59,7 @@ def main():
 
     # get video id
     for p in post_info:
-        for x in get_id(p[2]): p.append(x)
+        for x in parse_url(p[2]): p.append(x)
 
     # get video length
     for p in post_info:
